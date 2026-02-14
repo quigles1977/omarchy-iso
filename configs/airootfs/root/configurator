@@ -283,7 +283,7 @@ username_escaped=$(echo -n "$username" | jq -Rsa)
 
 # Build credentials JSON - include encryption password only if enabled
 if [[ "$encryption_enabled" == "true" ]]; then
-  cat <<<_EOF_ >user_credentials.json
+  cat <<_EOF_ >user_credentials.json
 {
     "encryption_password": $password_escaped,
     "root_enc_password": $password_hash_escaped,
@@ -298,12 +298,12 @@ if [[ "$encryption_enabled" == "true" ]]; then
 }
 _EOF_
 else
-  cat <<<_EOF_ >user_credentials.json
+  cat <<_EOF_ >user_credentials.json
 {
     "root_enc_password": $password_hash_escaped,
     "users": [
         {
-            "password": $password_hash_escaped,
+            "enc_password": $password_hash_escaped,
             "groups": [],
             "sudo": true,
             "username": $username_escaped
@@ -444,8 +444,13 @@ _EOF_
 
 # Add encryption config if enabled
 if [[ "$encryption_enabled" == "true" ]]; then
-  # Use sed to insert encryption config into disk_config
-  sed -i 's/"disk_config": {/"disk_encryption": {\n            "encryption_type": "luks",\n            "lvm_volumes": [],\n            "iter_time": 2000,\n            "partitions": ["8c2c2b92-1070-455d-b76a-56263bab24aa"],\n            "encryption_password": '"$password_escaped"'\n        },\n        "disk_config": {/' user_configuration.json
+  jq --arg pw "$password" '.disk_config.disk_encryption = {
+    "encryption_type": "luks",
+    "lvm_volumes": [],
+    "iter_time": 2000,
+    "partitions": ["8c2c2b92-1070-455d-b76a-56263bab24aa"],
+    "encryption_password": $pw
+  }' user_configuration.json > user_configuration.json.tmp && mv user_configuration.json.tmp user_configuration.json
 fi
 
 if [[ $1 == "dry" ]]; then
