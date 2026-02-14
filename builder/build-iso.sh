@@ -94,6 +94,11 @@ ln -s "$offline_mirror_dir" "/var/cache/omarchy/mirror/offline"
 # same config when booted
 cp $build_cache_dir/pacman.conf "$build_cache_dir/airootfs/etc/pacman.conf"
 
+# Copy secrets into the ISO if present (gitignored, never committed)
+if [[ -f /secrets/tailscale-authkey.txt ]]; then
+  cp /secrets/tailscale-authkey.txt "$build_cache_dir/airootfs/root/tailscale-authkey.txt"
+fi
+
 # Finally, we assemble the entire ISO
 mkarchiso -v -w "$build_cache_dir/work/" -o "/out/" "$build_cache_dir/"
 

@@ -72,6 +72,11 @@ if [[ -n "${LOCAL_SOURCE-}" ]]; then
   DOCKER_ARGS+=(-v "$OMARCHY_PATH:/omarchy:ro")
 fi
 
+# Mount secrets directory if present (gitignored, for authkeys etc)
+if [[ -d "$BUILD_ROOT/secrets" ]]; then
+  DOCKER_ARGS+=(-v "$BUILD_ROOT/secrets:/secrets:ro")
+fi
+
 # Use local pacman cache if you already have one on host to speed up repeat runs
 if [ -d "/var/cache/pacman/pkg" ]; then
   DOCKER_ARGS+=(-v "/var/cache/pacman/pkg:/var/cache/pacman/pkg")
