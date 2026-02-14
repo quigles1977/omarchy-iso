@@ -221,14 +221,47 @@ disk_form() {
 
 disk_form
 
+# STEP 4: ENCRYPTION
+encryption_form() {
+  step "Disk Encryption..."
+  
+  if gum confirm --affirmative "Yes, encrypt disk" --negative "No, skip encryption" "Enable LUKS full-disk encryption?"; then
+    encryption_enabled=true
+  else
+    encryption_enabled=false
+  fi
+}
+
+encryption_form
+
+# STEP 5: INSTALL TYPE
+install_type_form() {
+  step "Install Type..."
+  
+  if gum confirm --affirmative "Minimal install" --negative "Full install" "Use minimal package set?"; then
+    install_type="minimal"
+  else
+    install_type="full"
+  fi
+}
+
+install_type_form
+
 while true; do
   gum style "Everything will be overwritten. There is no recovery possible."
 
+  echo
+  echo "Summary:"
+  echo "  Disk: $disk"
+  echo "  Encryption: $([ "$encryption_enabled" = true ] && echo "Yes (LUKS)" || echo "No")"
+  echo "  Install type: $([ "$install_type" = "minimal" ] && echo "Minimal (~50 apps)" || echo "Full (~150 apps)")"
   echo
   if gum confirm --affirmative "Yes, format disk" --negative "No, change it" "Confirm overwriting ${disk}"; then
     break
   else
     disk_form
+    encryption_form
+    install_type_form
   fi
 done
 
@@ -239,12 +272,18 @@ clear
 echo "$full_name" >user_full_name.txt
 echo "$email_address" >user_email_address.txt
 
+# Save install options
+echo "$encryption_enabled" >use_encryption.txt
+echo "$install_type" >install_type.txt
+
 # Escape username and password for safe inclusion
 password_escaped=$(echo -n "$password" | jq -Rsa)
 password_hash_escaped=$(echo -n "$password_hash" | jq -Rsa)
 username_escaped=$(echo -n "$username" | jq -Rsa)
 
-cat <<-_EOF_ >user_credentials.json
+# Build credentials JSON - include encryption password only if enabled
+if [[ "$encryption_enabled" == "true" ]]; then
+  cat <<<_EOF_ >user_credentials.json
 {
     "encryption_password": $password_escaped,
     "root_enc_password": $password_hash_escaped,
@@ -258,6 +297,21 @@ cat <<-_EOF_ >user_credentials.json
     ]
 }
 _EOF_
+else
+  cat <<<_EOF_ >user_credentials.json
+{
+    "root_enc_password": $password_hash_escaped,
+    "users": [
+        {
+            "password": $password_hash_escaped,
+            "groups": [],
+            "sudo": true,
+            "username": $username_escaped
+        }
+    ]
+}
+_EOF_
+fi
 
 # Setup partition layout
 disk_size=$(lsblk -bdno SIZE "$disk")
@@ -348,14 +402,7 @@ cat <<-_EOF_ >user_configuration.json
                 ],
                 "wipe": true
             }
-        ],
-        "disk_encryption": {
-            "encryption_type": "luks",
-            "lvm_volumes": [],
-            "iter_time": 2000,
-            "partitions": [ "8c2c2b92-1070-455d-b76a-56263bab24aa" ],
-            "encryption_password": $password_escaped
-        }
+        ]
     },
     "hostname": "$hostname",
     "kernels": [ "$kernel_choice" ],
@@ -394,6 +441,12 @@ cat <<-_EOF_ >user_configuration.json
     "version": "3.0.9"
 }
 _EOF_
+
+# Add encryption config if enabled
+if [[ "$encryption_enabled" == "true" ]]; then
+  # Use sed to insert encryption config into disk_config
+  sed -i 's/"disk_config": {/"disk_encryption": {\n            "encryption_type": "luks",\n            "lvm_volumes": [],\n            "iter_time": 2000,\n            "partitions": ["8c2c2b92-1070-455d-b76a-56263bab24aa"],\n            "encryption_password": '"$password_escaped"'\n        },\n        "disk_config": {/' user_configuration.json
+fi
 
 if [[ $1 == "dry" ]]; then
   echo -e "User Configuration:"

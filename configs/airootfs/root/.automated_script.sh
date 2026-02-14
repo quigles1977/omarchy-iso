@@ -33,6 +33,25 @@ install_arch() {
 
 install_omarchy() {
   chroot_bash -lc "sudo pacman -S --noconfirm --needed gum" >/dev/null
+  
+  # Read install type from file
+  INSTALL_TYPE=$(cat /root/install_type.txt 2>/dev/null || echo "full")
+  
+  # Set minimal flag if needed
+  if [[ "$INSTALL_TYPE" == "minimal" ]]; then
+    export OMARCHY_MINIMAL=true
+  fi
+  
+  # Clone custom omarchy fork if OMARCHY_REPO is set, otherwise use included omarchy
+  if [[ -n "${OMARCHY_REPO:-}" ]]; then
+    chroot_bash -lc "rm -rf /home/$OMARCHY_USER/.local/share/omarchy"
+    chroot_bash -lc "git clone https://github.com/${OMARCHY_REPO}.git /home/$OMARCHY_USER/.local/share/omarchy"
+    if [[ -n "${OMARCHY_REF:-}" ]]; then
+      chroot_bash -lc "cd /home/$OMARCHY_USER/.local/share/omarchy && git fetch origin ${OMARCHY_REF} && git checkout ${OMARCHY_REF}"
+    fi
+    chroot_bash -lc "chown -R $OMARCHY_USER:$OMARCHY_USER /home/$OMARCHY_USER/.local/share/omarchy"
+  fi
+  
   chroot_bash -lc "source /home/$OMARCHY_USER/.local/share/omarchy/install.sh || bash"
 
   # Reboot if requested by installer
@@ -114,6 +133,10 @@ EOF
   # Copy the local omarchy repo to the user's home directory
   mkdir -p /mnt/home/$OMARCHY_USER/.local/share/
   cp -r /root/omarchy /mnt/home/$OMARCHY_USER/.local/share/
+
+  # Copy install options
+  cp /root/use_encryption.txt /mnt/root/ 2>/dev/null || true
+  cp /root/install_type.txt /mnt/root/ 2>/dev/null || true
 
   chown -R 1000:1000 /mnt/home/$OMARCHY_USER/.local/
 
